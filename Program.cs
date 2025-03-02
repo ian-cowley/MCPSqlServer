@@ -7,7 +7,7 @@ namespace MCPSqlServer;
 
 /// <summary>
 /// MCP SQL Server addon for Windsurf IDE
-/// This server acts as an MCP (Model-Code-Prompt) server that interacts with SQL Server
+/// This server acts as an MCP (Model Context Protocol) server that interacts with SQL Server
 /// to provide schema information, query execution, and other database operations.
 /// </summary>
 public class Program

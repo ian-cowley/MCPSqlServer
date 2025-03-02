@@ -1,6 +1,6 @@
 # SQL Server MCP Server for Windsurf IDE
 
-A standalone MCP (Model-Code-Prompt) server written in C# that provides SQL Server integration capabilities as an addon to Windsurf IDE.
+A standalone MCP (Model Context Protocol) server written in C# that provides SQL Server integration capabilities as an addon to Windsurf IDE.
 
 ## Features
 

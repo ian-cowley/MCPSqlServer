@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sqlMcpService": {
+      "command": "path/to/MCPSqlServer.exe",
+      "args": [],
+      "description": "SQL Server MCP Service"
+    }
+  }
+}

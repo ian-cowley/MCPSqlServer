@@ -106,15 +106,15 @@ public class JsonRpcHandler
     {
         var capabilities = new
         {
-            name = "SQL Server MCP",
-            version = "1.0.0",
+            protocolVersion = "2025-11-25",
+            serverInfo = new
+            {
+                name = "SQL Server MCP",
+                version = "1.0.0"
+            },
             capabilities = new
             {
-                databases = true,
-                tables = true,
-                columns = true,
-                procedures = true,
-                queryExecution = true
+                tools = new { }
             }
         };
 

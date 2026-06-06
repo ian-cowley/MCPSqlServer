@@ -16,7 +16,7 @@ A standalone MCP (Model Context Protocol) server written in C# that provides SQL
 
 ## Prerequisites
 
-- .NET 9.0 SDK or higher
+- .NET 10.0 SDK or higher
 - SQL Server instance (local or remote)
 - SQL Server client tools
 

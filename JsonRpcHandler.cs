@@ -38,6 +38,8 @@ public class JsonRpcHandler
                 return;
             }
 
+            bool isNotification = request.Id == null;
+
             switch (request.Method)
             {
                 case "initialize":
@@ -52,7 +54,10 @@ public class JsonRpcHandler
                 case "tools/call":
                     if (request.Params == null || !request.Params.TryGetValue("name", out JsonElement toolName))
                     {
-                        await SendErrorResponseAsync(request.Id, JsonRpcErrorCodes.InvalidParams, "Tool name is required", isMcpToolCall: false);
+                        if (!isNotification)
+                        {
+                            await SendErrorResponseAsync(request.Id, JsonRpcErrorCodes.InvalidParams, "Tool name is required", isMcpToolCall: false);
+                        }
                         return;
                     }
 
@@ -83,12 +88,18 @@ public class JsonRpcHandler
                             await HandleExecuteProcedureAsync(request);
                             break;
                         default:
-                            await SendErrorResponseAsync(request.Id, JsonRpcErrorCodes.MethodNotFound, $"Unknown tool: {toolName}", isMcpToolCall: false);
+                            if (!isNotification)
+                            {
+                                await SendErrorResponseAsync(request.Id, JsonRpcErrorCodes.MethodNotFound, $"Unknown tool: {toolName}", isMcpToolCall: false);
+                            }
                             break;
                     }
                     break;
                 default:
-                    await SendErrorResponseAsync(request.Id, JsonRpcErrorCodes.MethodNotFound, $"Unknown method: {request.Method}", isMcpToolCall: false);
+                    if (!isNotification)
+                    {
+                        await SendErrorResponseAsync(request.Id, JsonRpcErrorCodes.MethodNotFound, $"Unknown method: {request.Method}", isMcpToolCall: false);
+                    }
                     break;
             }
         }
@@ -123,8 +134,8 @@ public class JsonRpcHandler
 
     private async Task HandleNotificationsInitializedAsync(JsonRpcRequest request)
     {
-        // This is a notification method, so we just acknowledge it with an empty object
-        await SendSuccessResponseAsync(request.Id, new { }, isMcpToolCall: false);
+        // Notifications do not receive a response
+        await Task.CompletedTask;
     }
 
     private async Task HandleToolsListAsync(JsonRpcRequest request)
@@ -134,90 +145,188 @@ public class JsonRpcHandler
             new
             {
                 name = "get_databases",
-                description = "List all available SQL Server databases, response is in jsonrpc 2.0 format",
-                parameters = new { },
-                returns = new {
-                    type = "object, that contains a list of databases"
+                description = "List all available SQL Server databases",
+                inputSchema = new
+                {
+                    type = "object",
+                    properties = new { }
                 }
             },
             new
             {
                 name = "get_tables",
                 description = "List all tables in a specified database",
-                parameters = new
+                inputSchema = new
                 {
-                    database = "Database name",
-                    schema = "Optional schema name, defaults to 'dbo'"
-                },
-                required = new[] { "database" }
+                    type = "object",
+                    properties = new
+                    {
+                        database = new
+                        {
+                            type = "string",
+                            description = "Database name"
+                        },
+                        schema = new
+                        {
+                            type = "string",
+                            description = "Optional schema name, defaults to 'dbo'"
+                        }
+                    },
+                    required = new[] { "database" }
+                }
             },
             new
             {
                 name = "get_columns",
                 description = "List all columns in a specified table",
-                parameters = new
+                inputSchema = new
                 {
-                    database = "Database name",
-                    schema = "Optional schema name, defaults to 'dbo'",
-                    table = "Table name"
-                },
-                required = new[] { "database", "table" }
+                    type = "object",
+                    properties = new
+                    {
+                        database = new
+                        {
+                            type = "string",
+                            description = "Database name"
+                        },
+                        schema = new
+                        {
+                            type = "string",
+                            description = "Optional schema name, defaults to 'dbo'"
+                        },
+                        table = new
+                        {
+                            type = "string",
+                            description = "Table name"
+                        }
+                    },
+                    required = new[] { "database", "table" }
+                }
             },
             new
             {
                 name = "get_procedures",
                 description = "List all stored procedures in a specified database",
-                parameters = new
+                inputSchema = new
                 {
-                    database = "Database name",
-                    schema = "Optional schema name, defaults to 'dbo'"
-                },
-                required = new[] { "database" }
+                    type = "object",
+                    properties = new
+                    {
+                        database = new
+                        {
+                            type = "string",
+                            description = "Database name"
+                        },
+                        schema = new
+                        {
+                            type = "string",
+                            description = "Optional schema name, defaults to 'dbo'"
+                        }
+                    },
+                    required = new[] { "database" }
+                }
             },
             new
             {
                 name = "get_procedure_definition",
                 description = "Get the definition of a stored procedure",
-                parameters = new
+                inputSchema = new
                 {
-                    database = "Database name",
-                    schema = "Schema name",
-                    name = "Procedure name"
-                },
-                required = new[] { "database", "schema", "name" }
+                    type = "object",
+                    properties = new
+                    {
+                        database = new
+                        {
+                            type = "string",
+                            description = "Database name"
+                        },
+                        schema = new
+                        {
+                            type = "string",
+                            description = "Schema name"
+                        },
+                        name = new
+                        {
+                            type = "string",
+                            description = "Procedure name"
+                        }
+                    },
+                    required = new[] { "database", "schema", "name" }
+                }
             },
             new
             {
                 name = "execute_procedure",
                 description = "Execute a stored procedure",
-                parameters = new
+                inputSchema = new
                 {
-                    database = "Database name",
-                    procedure = "Procedure name",
-                    parameters = "Dictionary of parameter names and values"
-                },
-                required = new[] { "database", "procedure", "parameters" }
+                    type = "object",
+                    properties = new
+                    {
+                        database = new
+                        {
+                            type = "string",
+                            description = "Database name"
+                        },
+                        schema = new
+                        {
+                            type = "string",
+                            description = "Optional schema name, defaults to 'dbo'"
+                        },
+                        procedure = new
+                        {
+                            type = "string",
+                            description = "Procedure name"
+                        },
+                        parameters = new
+                        {
+                            type = "object",
+                            description = "Dictionary of parameter names and values"
+                        }
+                    },
+                    required = new[] { "database", "procedure" }
+                }
             },
             new
             {
                 name = "execute_database_query",
                 description = "Execute a SQL query in the context of a specific database",
-                parameters = new
+                inputSchema = new
                 {
-                    database = "Database name",
-                    query = "SQL query to execute"
-                },
-                required = new[] { "database", "query" }
+                    type = "object",
+                    properties = new
+                    {
+                        database = new
+                        {
+                            type = "string",
+                            description = "Database name"
+                        },
+                        query = new
+                        {
+                            type = "string",
+                            description = "SQL query to execute"
+                        }
+                    },
+                    required = new[] { "database", "query" }
+                }
             },
             new
             {
                 name = "execute_system_query",
                 description = "Execute a SQL query at the server instance level (no database context required)",
-                parameters = new
+                inputSchema = new
                 {
-                    query = "SQL query to execute"
-                },
-                required = new[] { "query" }
+                    type = "object",
+                    properties = new
+                    {
+                        query = new
+                        {
+                            type = "string",
+                            description = "SQL query to execute"
+                        }
+                    },
+                    required = new[] { "query" }
+                }
             }
         };
 
@@ -300,9 +409,9 @@ public class JsonRpcHandler
         }
 
         string schema = "dbo";
-        if (request.Params.TryGetValue("schema", out JsonElement schemaParam))
+        if (args.TryGetProperty("schema", out JsonElement schemaParam) && schemaParam.ValueKind != JsonValueKind.Null)
         {
-            schema = schemaParam.ToString();
+            schema = schemaParam.GetString() ?? "dbo";
         }
 
         using SqlConnection connection = new(_connectionString);
@@ -512,13 +621,13 @@ public class JsonRpcHandler
         }
 
         string schema = "dbo";
-        if (request.Params.TryGetValue("schema", out JsonElement schemaParam))
+        if (args.TryGetProperty("schema", out JsonElement schemaParam) && schemaParam.ValueKind != JsonValueKind.Null)
         {
-            schema = schemaParam.ToString();
+            schema = schemaParam.GetString() ?? "dbo";
         }
 
         Dictionary<string, JsonElement>? parameters = null;
-        if (request.Params.TryGetValue("parameters", out JsonElement parametersParam))
+        if (args.TryGetProperty("parameters", out JsonElement parametersParam) && parametersParam.ValueKind != JsonValueKind.Null)
         {
             parameters = parametersParam.Deserialize<Dictionary<string, JsonElement>>();
         }
@@ -539,7 +648,7 @@ public class JsonRpcHandler
         {
             foreach (KeyValuePair<string, JsonElement> param in parameters)
             {
-                command.Parameters.AddWithValue(param.Key, param.Value.GetRawText());
+                command.Parameters.AddWithValue(param.Key, GetValueFromJsonElement(param.Value));
             }
         }
 
@@ -568,6 +677,19 @@ public class JsonRpcHandler
         }
 
         return results;
+    }
+
+    private static object? GetValueFromJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.TryGetInt64(out long l) ? l : (element.TryGetDouble(out double d) ? d : element.GetDecimal()),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => DBNull.Value,
+            _ => element.GetRawText()
+        };
     }
 
     private async Task SendSuccessResponseAsync(object? id, object? result, bool isMcpToolCall = false)

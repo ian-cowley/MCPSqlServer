@@ -81,17 +81,21 @@ This will create a single executable file that includes all dependencies.
 
 ## Protocol
 
-The MCP server communicates through standard input/output using a JSON-based protocol.
+The MCP server communicates through standard input/output using the standard JSON-RPC 2.0 Model Context Protocol.
 
-### Request Format
+### Request Format (tools/call)
 
 ```json
 {
-  "id": "request-id",
-  "action": "action-name",
-  "parameters": {
-    "param1": "value1",
-    "param2": "value2"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "tool-name",
+    "arguments": {
+      "param1": "value1",
+      "param2": "value2"
+    }
   }
 }
 ```
@@ -100,9 +104,15 @@ The MCP server communicates through standard input/output using a JSON-based pro
 
 ```json
 {
-  "success": true,
-  "data": {
-    "key": "value"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "JSON-serialized tool output"
+      }
+    ]
   }
 }
 ```
@@ -111,111 +121,174 @@ Or in case of error:
 
 ```json
 {
-  "success": false,
+  "jsonrpc": "2.0",
+  "id": 1,
   "error": {
-    "code": "error_code",
+    "code": -32602,
     "message": "Error description"
   }
 }
 ```
 
-## Supported Actions
+## Supported Tools
 
-### 1. Connect to a SQL Server
+### 1. List Databases (`get_databases`)
 
+List all available non-system SQL Server databases.
+
+Request:
 ```json
 {
-  "action": "connect",
-  "parameters": {
-    "connectionString": "Data Source=server;Initial Catalog=master;Integrated Security=True;"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_databases",
+    "arguments": {}
   }
 }
 ```
 
-### 2. List Databases
+### 2. List Tables in a Database (`get_tables`)
 
+List all tables and views in a specified database.
+
+Request:
 ```json
 {
-  "action": "get_databases",
-  "parameters": {}
-}
-```
-
-### 3. List Tables in a Database
-
-```json
-{
-  "action": "get_tables",
-  "parameters": {
-    "database": "AdventureWorks"
-  }
-}
-```
-
-### 4. Get Table Columns
-
-```json
-{
-  "action": "get_columns",
-  "parameters": {
-    "database": "AdventureWorks",
-    "schema": "Person",
-    "table": "Person"
-  }
-}
-```
-
-### 5. List Stored Procedures
-
-```json
-{
-  "action": "get_procedures",
-  "parameters": {
-    "database": "AdventureWorks"
-  }
-}
-```
-
-### 6. Execute Database Query
-
-```json
-{
-  "action": "execute_database_query",
-  "parameters": {
-    "database": "AdventureWorks",
-    "query": "SELECT TOP 10 * FROM Person.Person",
-    "parameters": {
-      "param1": "value1"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_tables",
+    "arguments": {
+      "database": "AdventureWorks",
+      "schema": "dbo"
     }
   }
 }
 ```
 
-### 7. Execute System Query
+### 3. Get Table Columns (`get_columns`)
 
+List all columns and column metadata in a specified table.
+
+Request:
 ```json
 {
-  "action": "execute_system_query",
-  "parameters": {
-    "query": "SELECT name FROM sys.databases",
-    "parameters": {
-      "param1": "value1"
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_columns",
+    "arguments": {
+      "database": "AdventureWorks",
+      "schema": "Person",
+      "table": "Person"
     }
   }
 }
 ```
 
-### 8. Execute Stored Procedure
+### 4. List Stored Procedures (`get_procedures`)
 
+List all stored procedures in a specified database.
+
+Request:
 ```json
 {
-  "action": "execute_procedure",
-  "parameters": {
-    "database": "AdventureWorks",
-    "schema": "dbo",
-    "procedure": "uspGetEmployeeManagers",
-    "parameters": {
-      "BusinessEntityID": 5
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_procedures",
+    "arguments": {
+      "database": "AdventureWorks",
+      "schema": "dbo"
+    }
+  }
+}
+```
+
+### 5. Get Stored Procedure Definition (`get_procedure_definition`)
+
+Get the definition of a stored procedure.
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_procedure_definition",
+    "arguments": {
+      "database": "AdventureWorks",
+      "schema": "dbo",
+      "name": "uspGetEmployeeManagers"
+    }
+  }
+}
+```
+
+### 6. Execute Database Query (`execute_database_query`)
+
+Execute a SQL query in the context of a specific database.
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "execute_database_query",
+    "arguments": {
+      "database": "AdventureWorks",
+      "query": "SELECT TOP 10 * FROM Person.Person"
+    }
+  }
+}
+```
+
+### 7. Execute System Query (`execute_system_query`)
+
+Execute a SQL query at the server instance level (no database context required).
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "execute_system_query",
+    "arguments": {
+      "query": "SELECT name FROM sys.databases"
+    }
+  }
+}
+```
+
+### 8. Execute Stored Procedure (`execute_procedure`)
+
+Execute a stored procedure.
+
+Request:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "execute_procedure",
+    "arguments": {
+      "database": "AdventureWorks",
+      "schema": "dbo",
+      "procedure": "uspGetEmployeeManagers",
+      "parameters": {
+        "BusinessEntityID": 5
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
-# SQL Server MCP Server for Windsurf IDE
+# SQL Server MCP Server
 
-A standalone MCP (Model Context Protocol) server written in C# that provides SQL Server integration capabilities as an addon to Windsurf IDE.
+A standalone MCP (Model Context Protocol) server written in C# that provides SQL Server integration capabilities for any MCP-compliant IDE or client.
 
 ## Features
 
@@ -40,9 +40,9 @@ dotnet build
    }
    ```
 
-3. Configure the MCP server in Windsurf:
-   - Copy the contents of `windsurf_mcp_config.json` to your Windsurf MCP configuration file (typically located at `~/.codeium/windsurf/mcp_config.json`)
-   - Update the path to point to your built executable:
+3. Configure the MCP server in your IDE / client:
+   - Add the server configuration to your IDE's MCP config file (e.g., Windsurf, Claude Desktop config, or Cline/Cursor settings).
+   - Point the command to the path of your built executable:
    ```json
    {
      "mcpServers": {
@@ -294,9 +294,9 @@ Request:
 }
 ```
 
-## Integration with Windsurf
+## IDE / Client Integration
 
-This MCP server can be used from Windsurf IDE to:
+This MCP server can be used from any MCP-compliant IDE or client (e.g. Windsurf, Cursor, Cline, Claude Desktop) to:
 
 1. Browse database schemas
 2. Execute SQL queries and view results

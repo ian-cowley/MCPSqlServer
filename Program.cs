@@ -63,20 +63,42 @@ public class Program
 
     private static (StreamWriter readLogWriter, StreamWriter writeLogWriter) InitializeLogFiles(string basePath)
     {
-        // Ensure the log directory exists
-        Directory.CreateDirectory(basePath);
+        try
+        {
+            // Ensure the log directory exists
+            Directory.CreateDirectory(basePath);
 
-        string readLogPath = Path.Combine(basePath, "read.log");
-        string writeLogPath = Path.Combine(basePath, "write.log");
+            string readLogPath = Path.Combine(basePath, "read.log");
+            string writeLogPath = Path.Combine(basePath, "write.log");
 
-        // Create log files with UTF8 encoding and append mode
-        StreamWriter readLogWriter = new(readLogPath, append: true, encoding: Encoding.UTF8);
-        StreamWriter writeLogWriter = new(writeLogPath, append: true, encoding: Encoding.UTF8);
-        readLogWriter.AutoFlush = true;
-        writeLogWriter.AutoFlush = true;
-        Console.Error.WriteLine("Log files initialized");
+            // Create log files with UTF8 encoding and append mode
+            StreamWriter readLogWriter = new(readLogPath, append: true, encoding: Encoding.UTF8);
+            StreamWriter writeLogWriter = new(writeLogPath, append: true, encoding: Encoding.UTF8);
+            readLogWriter.AutoFlush = true;
+            writeLogWriter.AutoFlush = true;
+            Console.Error.WriteLine("Log files initialized");
 
-        return (readLogWriter, writeLogWriter);
+            return (readLogWriter, writeLogWriter);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Warning: Failed to initialize log files at '{basePath}' ({ex.Message}). Falling back to AppContext.BaseDirectory.");
+
+            // Fallback to binary directory
+            string fallbackPath = AppContext.BaseDirectory;
+            Directory.CreateDirectory(fallbackPath);
+
+            string readLogPath = Path.Combine(fallbackPath, "read.log");
+            string writeLogPath = Path.Combine(fallbackPath, "write.log");
+
+            StreamWriter readLogWriter = new(readLogPath, append: true, encoding: Encoding.UTF8);
+            StreamWriter writeLogWriter = new(writeLogPath, append: true, encoding: Encoding.UTF8);
+            readLogWriter.AutoFlush = true;
+            writeLogWriter.AutoFlush = true;
+            Console.Error.WriteLine("Log files initialized in AppContext.BaseDirectory");
+
+            return (readLogWriter, writeLogWriter);
+        }
     }
 
     private static (string connectionString, bool debugMode, string logPath) LoadConfiguration(string[] args)
@@ -166,36 +188,23 @@ public class Program
             return directPath;
         }
 
-        // 2. Scan subdirectories (excluding common build/temp folders)
-        try
-        {
-            var candidates = Directory.EnumerateFiles(currentDir, "appsettings.json", SearchOption.AllDirectories)
-                .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
-                            !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&
-                            !p.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}") &&
-                            !p.Contains($"{Path.DirectorySeparatorChar}.vs{Path.DirectorySeparatorChar}") &&
-                            !p.Contains($"{Path.DirectorySeparatorChar}.vscode{Path.DirectorySeparatorChar}"))
-                .ToList();
+        // 2. Scan subdirectories safely (excluding common build/temp folders)
+        var candidates = SafeEnumerateAppSettings(currentDir);
 
-            if (candidates.Count == 1)
-            {
-                return candidates[0];
-            }
-            else if (candidates.Count > 1)
-            {
-                Console.Error.WriteLine("Multiple appsettings.json files found in workspace:");
-                foreach (var candidate in candidates)
-                {
-                    Console.Error.WriteLine($"  - {candidate}");
-                }
-                var bestCandidate = candidates.OrderBy(c => c.Split(Path.DirectorySeparatorChar).Length).First();
-                Console.Error.WriteLine($"Using the one closest to root: {bestCandidate}");
-                return bestCandidate;
-            }
-        }
-        catch (Exception ex)
+        if (candidates.Count == 1)
         {
-            Console.Error.WriteLine($"Warning: Error searching workspace subdirectories for appsettings.json: {ex.Message}");
+            return candidates[0];
+        }
+        else if (candidates.Count > 1)
+        {
+            Console.Error.WriteLine("Multiple appsettings.json files found in workspace:");
+            foreach (var candidate in candidates)
+            {
+                Console.Error.WriteLine($"  - {candidate}");
+            }
+            var bestCandidate = candidates.OrderBy(c => c.Split(Path.DirectorySeparatorChar).Length).First();
+            Console.Error.WriteLine($"Using the one closest to root: {bestCandidate}");
+            return bestCandidate;
         }
 
         // 3. Fallback to AppContext.BaseDirectory
@@ -206,6 +215,44 @@ public class Program
         }
 
         return null;
+    }
+
+    private static List<string> SafeEnumerateAppSettings(string dir)
+    {
+        List<string> result = [];
+        try
+        {
+            // 1. Get appsettings.json in current directory
+            foreach (var file in Directory.EnumerateFiles(dir, "appsettings.json"))
+            {
+                result.Add(file);
+            }
+
+            // 2. Recurse into subdirectories, ignoring standard folders
+            foreach (var subDir in Directory.EnumerateDirectories(dir))
+            {
+                string dirName = Path.GetFileName(subDir);
+                if (dirName.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                    dirName.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+                    dirName.Equals(".git", StringComparison.OrdinalIgnoreCase) ||
+                    dirName.Equals(".vs", StringComparison.OrdinalIgnoreCase) ||
+                    dirName.Equals(".vscode", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                result.AddRange(SafeEnumerateAppSettings(subDir));
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Safely ignore folders we don't have permission to access
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Warning: Safely skipped directory '{dir}' during appsettings.json search: {ex.Message}");
+        }
+        return result;
     }
 
     private static async Task ProcessRequestsAsync(JsonRpcHandler handler, StreamWriter readLogWriter, StreamWriter writeLogWriter)

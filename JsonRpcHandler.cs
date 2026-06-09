@@ -1,6 +1,8 @@
 using MCPSqlServer.Models;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using System.Data;
+using System.IO;
 using System.Text.Json;
 
 namespace MCPSqlServer;
@@ -11,13 +13,15 @@ public class JsonRpcHandler
     private readonly string _connectionString;
     private readonly StreamWriter _writeLogWriter;
     private readonly bool _debugMode;
+    private readonly bool _allowWorkspaceOverride;
 
-    public JsonRpcHandler(JsonSerializerOptions jsonOptions, string connectionString, StreamWriter writeLogWriter, bool debugMode = false)
+    public JsonRpcHandler(JsonSerializerOptions jsonOptions, string connectionString, StreamWriter writeLogWriter, bool debugMode = false, bool allowWorkspaceOverride = true)
     {
         _jsonOptions = jsonOptions;
         _connectionString = connectionString;
         _writeLogWriter = writeLogWriter;
         _debugMode = debugMode;
+        _allowWorkspaceOverride = allowWorkspaceOverride;
     }
 
     public async Task ProcessRequestAsync(string requestJson)
@@ -149,7 +153,14 @@ public class JsonRpcHandler
                 inputSchema = new
                 {
                     type = "object",
-                    properties = new { }
+                    properties = new
+                    {
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
+                        }
+                    }
                 }
             },
             new
@@ -170,6 +181,11 @@ public class JsonRpcHandler
                         {
                             type = "string",
                             description = "Optional schema name, defaults to 'dbo'"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "database" }
@@ -198,6 +214,11 @@ public class JsonRpcHandler
                         {
                             type = "string",
                             description = "Table name"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "database", "table" }
@@ -221,6 +242,11 @@ public class JsonRpcHandler
                         {
                             type = "string",
                             description = "Optional schema name, defaults to 'dbo'"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "database" }
@@ -249,6 +275,11 @@ public class JsonRpcHandler
                         {
                             type = "string",
                             description = "Procedure name"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "database", "schema", "name" }
@@ -282,6 +313,11 @@ public class JsonRpcHandler
                         {
                             type = "object",
                             description = "Dictionary of parameter names and values"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "database", "procedure" }
@@ -305,6 +341,11 @@ public class JsonRpcHandler
                         {
                             type = "string",
                             description = "SQL query to execute"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "database", "query" }
@@ -323,6 +364,11 @@ public class JsonRpcHandler
                         {
                             type = "string",
                             description = "SQL query to execute"
+                        },
+                        currentFilePath = new
+                        {
+                            type = "string",
+                            description = "Optional path of the active file in the editor. Used to automatically find the nearest appsettings.json."
                         }
                     },
                     required = new[] { "query" }
@@ -335,7 +381,13 @@ public class JsonRpcHandler
 
     private async Task HandleGetDatabasesAsync(JsonRpcRequest request)
     {
-        using SqlConnection connection = new(_connectionString);
+        JsonElement args = default;
+        if (request.Params != null && request.Params.TryGetValue("arguments", out JsonElement argsElement))
+        {
+            args = argsElement;
+        }
+
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         List<string> databases = [];
@@ -364,7 +416,7 @@ public class JsonRpcHandler
             return;
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         // Switch to the specified database
@@ -414,7 +466,7 @@ public class JsonRpcHandler
             schema = schemaParam.GetString() ?? "dbo";
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         // Switch to the specified database
@@ -484,7 +536,7 @@ public class JsonRpcHandler
             return;
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         // Switch to the specified database
@@ -529,7 +581,7 @@ public class JsonRpcHandler
             return;
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         // Switch to the specified database
@@ -572,7 +624,7 @@ public class JsonRpcHandler
             return;
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         // Switch to the specified database
@@ -598,7 +650,7 @@ public class JsonRpcHandler
             return;
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         using SqlCommand command = new(query.ToString(), connection);
@@ -632,7 +684,7 @@ public class JsonRpcHandler
             parameters = parametersParam.Deserialize<Dictionary<string, JsonElement>>();
         }
 
-        using SqlConnection connection = new(_connectionString);
+        using SqlConnection connection = new(GetConnectionString(args));
         await connection.OpenAsync();
 
         // Switch to the specified database
@@ -692,6 +744,61 @@ public class JsonRpcHandler
         };
     }
 
+    private string GetConnectionString(JsonElement args)
+    {
+        if (_allowWorkspaceOverride)
+        {
+            if (args.ValueKind == JsonValueKind.Object && args.TryGetProperty("currentFilePath", out JsonElement pathElem) && pathElem.ValueKind == JsonValueKind.String)
+            {
+                string path = pathElem.GetString() ?? "";
+                if (!string.IsNullOrEmpty(path))
+                {
+                    string? resolvedConnStr = FindAndLoadConnectionString(path);
+                    if (!string.IsNullOrEmpty(resolvedConnStr))
+                    {
+                        return resolvedConnStr;
+                    }
+                }
+            }
+        }
+
+        return _connectionString;
+    }
+
+    private static string? FindAndLoadConnectionString(string startPath)
+    {
+        try
+        {
+            string? currentDir = Directory.Exists(startPath) ? startPath : Path.GetDirectoryName(startPath);
+
+            while (!string.IsNullOrEmpty(currentDir))
+            {
+                string appSettingsFile = Path.Combine(currentDir, "appsettings.json");
+                if (File.Exists(appSettingsFile))
+                {
+                    IConfigurationRoot config = new ConfigurationBuilder()
+                        .SetBasePath(currentDir)
+                        .AddJsonFile("appsettings.json", optional: false)
+                        .Build();
+                    
+                    string? connStr = config.GetConnectionString("DefaultConnection");
+                    if (!string.IsNullOrEmpty(connStr))
+                    {
+                        Console.Error.WriteLine($"Dynamically loaded connection string from project config: {appSettingsFile}");
+                        return connStr;
+                    }
+                }
+
+                currentDir = Path.GetDirectoryName(currentDir);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Warning: Failed resolving project-specific connection string from path '{startPath}': {ex.Message}");
+        }
+        return null;
+    }
+
     private async Task SendSuccessResponseAsync(object? id, object? result, bool isMcpToolCall = false)
     {
         JsonRpcResponse response;
@@ -740,7 +847,6 @@ public class JsonRpcHandler
             response = new JsonRpcResponse
             {
                 Id = id,
-                Error = new JsonRpcError { Code = code, Message = message },
                 Result = new McpToolResult
                 {
                     Content =

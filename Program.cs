@@ -31,14 +31,15 @@ public class Program
             InitializeConsoleEncoding();
 
             // Load configuration and get connection string
-            var (connectionString, debugMode, logPath) = LoadConfiguration(args);
+            var (connectionString, debugMode, logPath, allowWorkspaceOverride) = LoadConfiguration(args);
             Console.Error.WriteLine($"Log path: {logPath}");
+            Console.Error.WriteLine($"Allow workspace override: {allowWorkspaceOverride}");
 
             var (readLogWriter, writeLogWriterTemp) = InitializeLogFiles(logPath);
             writeLogWriter = writeLogWriterTemp;
 
             // Create JSON-RPC handler with logging
-            JsonRpcHandler handler = new(_jsonOptions, connectionString, writeLogWriter, debugMode);
+            JsonRpcHandler handler = new(_jsonOptions, connectionString, writeLogWriter, debugMode, allowWorkspaceOverride);
             Console.Error.WriteLine("JSON-RPC handler created");
 
             // Process requests
@@ -101,7 +102,7 @@ public class Program
         }
     }
 
-    private static (string connectionString, bool debugMode, string logPath) LoadConfiguration(string[] args)
+    private static (string connectionString, bool debugMode, string logPath, bool allowWorkspaceOverride) LoadConfiguration(string[] args)
     {
         string? configPath = null;
 
@@ -140,7 +141,7 @@ public class Program
 
         if (configPath == null)
         {
-            throw new FileNotFoundException("Could not find 'appsettings.json' in either the workspace directory, its subdirectories, or the application binary directory.");
+            throw new FileNotFoundException("Could not find 'appsettings.json' in either the workspace directory or the application binary directory.");
         }
 
         // Load configuration
@@ -174,40 +175,24 @@ public class Program
             Console.Error.WriteLine("LogPath not found in configuration, using default path");
         }
 
-        return (connectionString, debugMode, logPath);
+        // Get allow workspace override setting
+        var allowWorkspaceOverride = configuration["AllowWorkspaceOverride"]?.ToLowerInvariant() is not "false";
+
+        return (connectionString, debugMode, logPath, allowWorkspaceOverride);
     }
 
     private static string? FindAppSettingsPath()
     {
         string currentDir = Directory.GetCurrentDirectory();
 
-        // 1. Check current directory directly
+        // 1. Check current directory directly (workspace root)
         string directPath = Path.Combine(currentDir, "appsettings.json");
         if (File.Exists(directPath))
         {
             return directPath;
         }
 
-        // 2. Scan subdirectories safely (excluding common build/temp folders)
-        var candidates = SafeEnumerateAppSettings(currentDir);
-
-        if (candidates.Count == 1)
-        {
-            return candidates[0];
-        }
-        else if (candidates.Count > 1)
-        {
-            Console.Error.WriteLine("Multiple appsettings.json files found in workspace:");
-            foreach (var candidate in candidates)
-            {
-                Console.Error.WriteLine($"  - {candidate}");
-            }
-            var bestCandidate = candidates.OrderBy(c => c.Split(Path.DirectorySeparatorChar).Length).First();
-            Console.Error.WriteLine($"Using the one closest to root: {bestCandidate}");
-            return bestCandidate;
-        }
-
-        // 3. Fallback to AppContext.BaseDirectory
+        // 2. Fallback to AppContext.BaseDirectory directly (where the binary lives)
         string fallbackPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         if (File.Exists(fallbackPath))
         {
@@ -215,44 +200,6 @@ public class Program
         }
 
         return null;
-    }
-
-    private static List<string> SafeEnumerateAppSettings(string dir)
-    {
-        List<string> result = [];
-        try
-        {
-            // 1. Get appsettings.json in current directory
-            foreach (var file in Directory.EnumerateFiles(dir, "appsettings.json"))
-            {
-                result.Add(file);
-            }
-
-            // 2. Recurse into subdirectories, ignoring standard folders
-            foreach (var subDir in Directory.EnumerateDirectories(dir))
-            {
-                string dirName = Path.GetFileName(subDir);
-                if (dirName.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
-                    dirName.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
-                    dirName.Equals(".git", StringComparison.OrdinalIgnoreCase) ||
-                    dirName.Equals(".vs", StringComparison.OrdinalIgnoreCase) ||
-                    dirName.Equals(".vscode", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                result.AddRange(SafeEnumerateAppSettings(subDir));
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Safely ignore folders we don't have permission to access
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Warning: Safely skipped directory '{dir}' during appsettings.json search: {ex.Message}");
-        }
-        return result;
     }
 
     private static async Task ProcessRequestsAsync(JsonRpcHandler handler, StreamWriter readLogWriter, StreamWriter writeLogWriter)

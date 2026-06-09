@@ -13,6 +13,7 @@ A standalone MCP (Model Context Protocol) server written in C# that provides SQL
 - Stored procedure execution
 - Debug mode for troubleshooting
 - Configurable logging path
+- **Dynamic Project Connection Resolver**: Automatically resolves and overrides database connection strings dynamically based on the active file in the editor
 
 ## Prerequisites
 
@@ -68,6 +69,16 @@ The `appsettings.json` file contains the following configuration options:
 - `ConnectionStrings:DefaultConnection`: The SQL Server connection string
 - `LogPath`: Directory where log files will be stored
 - `DebugMode`: Set to "true" to enable detailed debug logging
+- `AllowWorkspaceOverride`: Set to "false" to disable dynamic project connection overrides (defaults to "true")
+
+## Dynamic Project Connection Resolver
+
+In multi-project workspaces where different folders or subprojects connect to different databases, you can avoid updating the main configuration constantly:
+
+1. All database tools accept an optional `currentFilePath` parameter (typically automatically populated by the IDE client with the active file's path).
+2. The server walks up the directory tree from the file's parent folder looking for the nearest `appsettings.json`.
+3. If found, it dynamically extracts and uses that file's `ConnectionStrings:DefaultConnection` for the query execution.
+4. If no config file is found, or if `AllowWorkspaceOverride` is set to `"false"`, it falls back to the primary connection string loaded at startup.
 
 ## Publishing
 
